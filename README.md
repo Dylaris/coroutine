@@ -12,6 +12,6 @@ $ gcc counter.c -I ..
 $ ./counter
 ```
 
-## references
+## Reference
 - [Thanks to tsoding for the video](https://www.youtube.com/watch?v=sYSP_elDdZw)
 - [A helpful blog](https://zhuanlan.zhihu.com/p/619176666)
