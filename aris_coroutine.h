@@ -1,5 +1,5 @@
 /*
-coroutine.h - v0.01 - Dylaris 2025
+aris_coroutine.h - v0.01 - Dylaris 2025
 ===================================================
 
 BRIEF:
