@@ -2,7 +2,7 @@
 
 ## Brief
 
-Lus-Style Coroutine implementation for C language as a stb-style library. Only support Linux.
+Lua-Style Coroutine implementation for C language as a stb-style library. Only support Linux.
 
 ## Usage
 
