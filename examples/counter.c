@@ -31,6 +31,6 @@ int main(void)
     printf("alive: %zu\n", coroutine_get_alive_count());
     printf("------ counter ------\n");
 
-    coroutine_group_free();
+    coroutine_group_fini();
     return 0;
 }

@@ -60,7 +60,7 @@ typedef struct aris_coroutine {
 } aris_coroutine;
 
 void aris_coroutine_group_init(void);
-void aris_coroutine_group_free(void);
+void aris_coroutine_group_fini(void);
 aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*));
 bool aris_coroutine_resume(aris_coroutine *next, void *resume_value);
 bool aris_coroutine_yield(void *yield_value);
@@ -105,46 +105,46 @@ typedef enum aris_register {
 #define ARIS_COROUTINE_STACK_SIZE (16*1024)
 #define ARIS_PROTECT_REGION_SIZE  64
 
-typedef struct aris__vector_header {
+typedef struct aris_vec_tor_header {
     size_t size;
     size_t capacity;
-} aris__vector_header ;
+} aris_vec_tor_header ;
 
-#define aris__vec_header(vec) \
-    ((aris__vector_header*)((char*)(vec) - sizeof(aris__vector_header)))
-#define aris__vec_size(vec) ((vec) ? aris__vec_header(vec)->size : 0)
-#define aris__vec_capacity(vec)  ((vec) ? aris__vec_header(vec)->capacity : 0)
-#define aris__vec_push(vec, item)                                              \
+#define aris_vec__header(vec) \
+    ((aris_vec_tor_header*)((char*)(vec) - sizeof(aris_vec_tor_header)))
+#define aris_vec__size(vec) ((vec) ? aris_vec__header(vec)->size : 0)
+#define aris_vec__capacity(vec)  ((vec) ? aris_vec__header(vec)->capacity : 0)
+#define aris_vec__push(vec, item)                                              \
     do {                                                                       \
-        if (aris__vec_size(vec) + 1 > aris__vec_capacity(vec)) {               \
+        if (aris_vec__size(vec) + 1 > aris_vec__capacity(vec)) {               \
             size_t new_capacity, alloc_size;                                   \
-            aris__vector_header *new_header;                                   \
+            aris_vec_tor_header *new_header;                                   \
                                                                                \
-            new_capacity = aris__vec_capacity(vec) == 0                        \
-                           ? 16 : 2 * aris__vec_capacity(vec);                 \
-            alloc_size = sizeof(aris__vector_header) +                         \
+            new_capacity = aris_vec__capacity(vec) == 0                        \
+                           ? 16 : 2 * aris_vec__capacity(vec);                 \
+            alloc_size = sizeof(aris_vec_tor_header) +                         \
                          new_capacity*sizeof(*(vec));                          \
                                                                                \
             if (vec) {                                                         \
-                new_header = realloc(aris__vec_header(vec), alloc_size);       \
+                new_header = realloc(aris_vec__header(vec), alloc_size);       \
             } else {                                                           \
                 new_header = malloc(alloc_size);                               \
                 new_header->size = 0;                                          \
             }                                                                  \
             new_header->capacity = new_capacity;                               \
                                                                                \
-            (vec) = (void*)((char*)new_header + sizeof(aris__vector_header));  \
+            (vec) = (void*)((char*)new_header + sizeof(aris_vec_tor_header));  \
         }                                                                      \
                                                                                \
-        (vec)[aris__vec_header(vec)->size++] = (item);                         \
+        (vec)[aris_vec__header(vec)->size++] = (item);                         \
     } while (0)
-#define aris__vec_pop(vec) ((vec)[--aris__vec_header(vec)->size])
-#define aris__vec_free(vec)                   \
+#define aris_vec__pop(vec) ((vec)[--aris_vec__header(vec)->size])
+#define aris_vec__free(vec)                   \
     do {                                      \
-        if (vec) free(aris__vec_header(vec)); \
+        if (vec) free(aris_vec__header(vec)); \
         (vec) = NULL;                         \
     } while (0)
-#define aris__vec_reset(vec) ((vec) ? aris__vec_header(vec)->size = 0 : 0)
+#define aris_vec__reset(vec) ((vec) ? aris_vec__header(vec)->size = 0 : 0)
 
 static void __attribute__((naked)) aris__coroutine_switch(
     const aris_coroutine *cur, const aris_coroutine *next)
@@ -212,23 +212,23 @@ void aris_coroutine_group_init(void)
 
     group.coroutines = NULL;
     group.resumers = NULL;
-    aris__vec_push(group.coroutines, main_coroutine);
+    aris_vec__push(group.coroutines, main_coroutine);
     group.current = &group.coroutines[0];
     group.alive_count = 1;
 }
 
-void aris_coroutine_group_free(void)
+void aris_coroutine_group_fini(void)
 {
     /* Return if it is not main coroutine */
     if (group.current != &group.coroutines[0]) return;
 
-    for (size_t i = 1; i < aris__vec_size(group.coroutines); i++) {
+    for (size_t i = 1; i < aris_vec__size(group.coroutines); i++) {
         aris_coroutine *coroutine = &group.coroutines[i];
         if (coroutine->stack_base) free(coroutine->stack_base);
     }
 
-    aris__vec_free(group.coroutines);
-    aris__vec_free(group.resumers);
+    aris_vec__free(group.coroutines);
+    aris_vec__free(group.resumers);
 }
 
 aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*))
@@ -253,10 +253,10 @@ aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*))
     coroutine.yield_value = NULL;
     coroutine.resume_value = NULL;
 
-    aris__vec_push(group.coroutines, coroutine);
+    aris_vec__push(group.coroutines, coroutine);
     group.alive_count++;
 
-    return &group.coroutines[aris__vec_size(group.coroutines) - 1];
+    return &group.coroutines[aris_vec__size(group.coroutines) - 1];
 }
 
 bool aris_coroutine_resume(aris_coroutine *next, void *resume_value)
@@ -280,7 +280,7 @@ bool aris_coroutine_resume(aris_coroutine *next, void *resume_value)
     group.current = next;
     group.current->status = ARIS_COROUTINE_RUNNING;
 
-    aris__vec_push(group.resumers, current);
+    aris_vec__push(group.resumers, current);
     aris__coroutine_switch(current, next);
 
     return true;
@@ -289,12 +289,12 @@ bool aris_coroutine_resume(aris_coroutine *next, void *resume_value)
 bool aris_coroutine_yield(void *yield_value)
 {
     if (group.current->status != ARIS_COROUTINE_RUNNING ||
-        aris__vec_size(group.resumers) == 0) {
+        aris_vec__size(group.resumers) == 0) {
         return false;
     }
 
     aris_coroutine *current = group.current;
-    aris_coroutine *next = aris__vec_pop(group.resumers);
+    aris_coroutine *next = aris_vec__pop(group.resumers);
     if (next->status != ARIS_COROUTINE_SUSPEND) return false;
 
     next->yield_value = yield_value;
@@ -311,10 +311,10 @@ bool aris_coroutine_yield(void *yield_value)
 bool aris_coroutine_finish(void *return_value)
 {
     if (group.current->status != ARIS_COROUTINE_RUNNING) return false;
-    if (aris__vec_size(group.resumers) == 0) exit(100);
+    if (aris_vec__size(group.resumers) == 0) exit(100);
 
     aris_coroutine *current = group.current;
-    aris_coroutine *next = aris__vec_pop(group.resumers);
+    aris_coroutine *next = aris_vec__pop(group.resumers);
     if (next->status != ARIS_COROUTINE_SUSPEND) return false;
 
     next->yield_value = return_value;
@@ -333,7 +333,7 @@ size_t aris_coroutine_collect(void)
 {
     size_t dead_count = 0;
 
-    for (size_t i = 0; i < aris__vec_size(group.coroutines); i++) {
+    for (size_t i = 0; i < aris_vec__size(group.coroutines); i++) {
         aris_coroutine *coroutine = &group.coroutines[i];
         if (coroutine->status == ARIS_COROUTINE_DEAD) {
             if (coroutine->stack_base) free(coroutine->stack_base);
@@ -375,20 +375,20 @@ void *aris_coroutine_get_yield_value(const aris_coroutine *coroutine)
     return coroutine->yield_value;
 }
 
-#undef aris__vec_header
-#undef aris__vec_size
-#undef aris__vec_capacity
-#undef aris__vec_push
-#undef aris__vec_pop
-#undef aris__vec_free
-#undef aris__vec_reset
+#undef aris_vec__header
+#undef aris_vec__size
+#undef aris_vec__capacity
+#undef aris_vec__push
+#undef aris_vec__pop
+#undef aris_vec__free
+#undef aris_vec__reset
 
 #endif /* ARIS_COROUTINE_IMPLEMENTATION */
 
 #ifdef ARIS_COROUTINE_STRIP_PREFIX
 
 #define coroutine_group_init         aris_coroutine_group_init
-#define coroutine_group_free         aris_coroutine_group_free
+#define coroutine_group_fini         aris_coroutine_group_fini
 #define coroutine_create             aris_coroutine_create
 #define coroutine_resume             aris_coroutine_resume
 #define coroutine_yield              aris_coroutine_yield
