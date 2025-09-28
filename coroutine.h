@@ -1,26 +1,26 @@
 /*
-aris_coroutine.h - v0.02 - Dylaris 2025
+coroutine.h - v0.02 - Dylaris 2025
 ===================================================
 
 BRIEF:
   Lua-Style Coroutine implementation for C language.
 
 NOTICE:
-  This implementation uses GNU embedded assembly
-  and is not compatible with C++. Only support Linux
-  because of ABI.
+  This implementation uses GNU embedded assembly. Only
+  support Linux because of ABI.
+  And it is not compatible with C++ (no test).
 
 USAGE:
   In exactly one source file, define the implementation macro
   before including this header:
   ```
-    #define ARIS_COROUTINE_IMPLEMENTATION
-    #include "aris_coroutine.h"
+    #define COROUTINE_IMPLEMENTATION
+    #include "coroutine.h"
   ```
   In other files, just include the header without the macro.
 
 HISTORY:
-    v0.02 Remove struct 'aris_coroutine_group' (coroutine groups can
+    v0.02 Remove struct 'coroutine_group' (coroutine groups can
           cause ambiguity in the attribution of the main coroutine).
           Support data exchange between resume() and yield().
 
@@ -28,8 +28,8 @@ LICENSE:
   See the end of this file for further details.
 */
 
-#ifndef ARIS_COROUTINE_H
-#define ARIS_COROUTINE_H
+#ifndef COROUTINE_H
+#define COROUTINE_H
 
 #include <stddef.h>
 #include <stdio.h>
@@ -38,18 +38,18 @@ LICENSE:
 #include <stdbool.h>
 #include <stdarg.h>
 
-typedef enum aris_coroutine_status {
-    ARIS_COROUTINE_READY,
-    ARIS_COROUTINE_RUNNING,
-    ARIS_COROUTINE_SUSPEND,
-    ARIS_COROUTINE_DEAD
-} aris_coroutine_status;
+typedef enum Coroutine_Status {
+    COROUTINE_READY,
+    COROUTINE_RUNNING,
+    COROUTINE_SUSPEND,
+    COROUTINE_DEAD
+} Coroutine_Status;
 
-typedef struct aris_coroutine {
+typedef struct Coroutine {
     void *regs[14];
     size_t stack_size;
     void *stack_base;
-    aris_coroutine_status status;
+    Coroutine_Status status;
     const char *name;
     union {
         void *yield_value;  /* used to store the value passed by yield() */
@@ -57,25 +57,25 @@ typedef struct aris_coroutine {
                                (as the return value of yield() or the parameter
                                value of startup function) */
     };
-} aris_coroutine;
+} Coroutine;
 
-void aris_coroutine_group_init(void);
-void aris_coroutine_group_fini(void);
-aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*));
-bool aris_coroutine_resume(aris_coroutine *next, void *resume_value);
-bool aris_coroutine_yield(void *yield_value);
-bool aris_coroutine_finish(void *return_value);
-size_t aris_coroutine_collect(void);
-size_t aris_coroutine_get_alive_count(void);
-aris_coroutine_status aris_coroutine_get_status(const aris_coroutine *coroutine);
-const char *aris_coroutine_get_name(const aris_coroutine *coroutine);
-void *aris_coroutine_get_resume_value(const aris_coroutine *coroutine);
-void *aris_coroutine_get_yield_value(const aris_coroutine *coroutine);
-const aris_coroutine *aris_coroutine_get_current(void);
+void coroutine_group_init(void);
+void coroutine_group_fini(void);
+Coroutine *coroutine_create(const char *name, void (*task)(void*));
+bool coroutine_resume(Coroutine *next, void *resume_value);
+bool coroutine_yield(void *yield_value);
+bool coroutine_finish(void *return_value);
+size_t coroutine_collect(void);
+size_t coroutine_get_alive_count(void);
+Coroutine_Status coroutine_get_status(const Coroutine *coroutine);
+const char *coroutine_get_name(const Coroutine *coroutine);
+void *coroutine_get_resume_value(const Coroutine *coroutine);
+void *coroutine_get_yield_value(const Coroutine *coroutine);
+const Coroutine *coroutine_get_current(void);
 
-#endif /* ARIS_COROUTINE_H */
+#endif /* COROUTINE_H */
 
-#ifdef ARIS_COROUTINE_IMPLEMENTATION
+#ifdef COROUTINE_IMPLEMENTATION
 
 /*
 64bit (context.regs[14])
@@ -102,7 +102,7 @@ typedef enum aris_register {
     CTX_RDI, CTX_RSI, CTX_RET, CTX_RDX, CTX_RCX, CTX_RBX, CTX_RSP
 } aris_register;
 
-#define ARIS_COROUTINE_STACK_SIZE (16*1024)
+#define COROUTINE_STACK_SIZE (16*1024)
 #define ARIS_PROTECT_REGION_SIZE  64
 
 typedef struct aris_vec_tor_header {
@@ -146,8 +146,8 @@ typedef struct aris_vec_tor_header {
     } while (0)
 #define aris_vec__reset(vec) ((vec) ? aris_vec__header(vec)->size = 0 : 0)
 
-static void __attribute__((naked)) aris__coroutine_switch(
-    const aris_coroutine *cur, const aris_coroutine *next)
+static void __attribute__((naked)) coroutine__switch(
+    const Coroutine *cur, const Coroutine *next)
 {
     (void)cur;
     (void)next;
@@ -193,21 +193,21 @@ static void __attribute__((naked)) aris__coroutine_switch(
 }
 
 static struct {
-    aris_coroutine *coroutines; /* coroutine array */
-    aris_coroutine **resumers;  /* stack to record the path of resume coroutine */
-    aris_coroutine *current;    /* current running coroutine */
+    Coroutine *coroutines; /* coroutine array */
+    Coroutine **resumers;  /* stack to record the path of resume coroutine */
+    Coroutine *current;    /* current running coroutine */
     size_t alive_count;
 } group;
 
-void aris_coroutine_group_init(void)
+void coroutine_group_init(void)
 {
     /* Return if it is not the first time */
     if (group.coroutines) return;
 
-    aris_coroutine main_coroutine;
+    Coroutine main_coroutine;
 
-    memset(&main_coroutine, 0, sizeof(aris_coroutine));
-    main_coroutine.status = ARIS_COROUTINE_RUNNING;
+    memset(&main_coroutine, 0, sizeof(Coroutine));
+    main_coroutine.status = COROUTINE_RUNNING;
     main_coroutine.name = "@main@";
 
     group.coroutines = NULL;
@@ -217,13 +217,13 @@ void aris_coroutine_group_init(void)
     group.alive_count = 1;
 }
 
-void aris_coroutine_group_fini(void)
+void coroutine_group_fini(void)
 {
     /* Return if it is not main coroutine */
     if (group.current != &group.coroutines[0]) return;
 
     for (size_t i = 1; i < aris_vec__size(group.coroutines); i++) {
-        aris_coroutine *coroutine = &group.coroutines[i];
+        Coroutine *coroutine = &group.coroutines[i];
         if (coroutine->stack_base) free(coroutine->stack_base);
     }
 
@@ -231,13 +231,13 @@ void aris_coroutine_group_fini(void)
     aris_vec__free(group.resumers);
 }
 
-aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*))
+Coroutine *coroutine_create(const char *name, void (*task)(void*))
 {
-    aris_coroutine coroutine;
+    Coroutine coroutine;
 
-    memset(&coroutine, 0, sizeof(aris_coroutine));
-    coroutine.stack_size = ARIS_COROUTINE_STACK_SIZE;
-    coroutine.stack_base = malloc(ARIS_COROUTINE_STACK_SIZE);
+    memset(&coroutine, 0, sizeof(Coroutine));
+    coroutine.stack_size = COROUTINE_STACK_SIZE;
+    coroutine.stack_base = malloc(COROUTINE_STACK_SIZE);
     if (!coroutine.stack_base) {
         perror("malloc");
         return NULL;
@@ -248,7 +248,7 @@ aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*))
                               coroutine.stack_size -
                               ARIS_PROTECT_REGION_SIZE;
                               /* reserve some bytes for protection */
-    coroutine.status = ARIS_COROUTINE_READY;
+    coroutine.status = COROUTINE_READY;
     coroutine.name = name;
     coroutine.yield_value = NULL;
     coroutine.resume_value = NULL;
@@ -259,83 +259,83 @@ aris_coroutine *aris_coroutine_create(const char *name, void (*task)(void*))
     return &group.coroutines[aris_vec__size(group.coroutines) - 1];
 }
 
-bool aris_coroutine_resume(aris_coroutine *next, void *resume_value)
+bool coroutine_resume(Coroutine *next, void *resume_value)
 {
-    if (!next || (next->status != ARIS_COROUTINE_SUSPEND &&
-        next->status != ARIS_COROUTINE_READY)) {
+    if (!next || (next->status != COROUTINE_SUSPEND &&
+        next->status != COROUTINE_READY)) {
         return false;
     }
 
-    aris_coroutine *current = group.current;
+    Coroutine *current = group.current;
 
     /* If it is just started, set resume_value to the parameter value of
        the startup function; otherwise, store it in the resume_value field. */
-    if (next->status == ARIS_COROUTINE_READY) {
+    if (next->status == COROUTINE_READY) {
         next->regs[CTX_RDI] = resume_value;
     } else {
         next->resume_value = resume_value;
     }
 
-    group.current->status = ARIS_COROUTINE_SUSPEND;
+    group.current->status = COROUTINE_SUSPEND;
     group.current = next;
-    group.current->status = ARIS_COROUTINE_RUNNING;
+    group.current->status = COROUTINE_RUNNING;
 
     aris_vec__push(group.resumers, current);
-    aris__coroutine_switch(current, next);
+    coroutine__switch(current, next);
 
     return true;
 }
 
-bool aris_coroutine_yield(void *yield_value)
+bool coroutine_yield(void *yield_value)
 {
-    if (group.current->status != ARIS_COROUTINE_RUNNING ||
+    if (group.current->status != COROUTINE_RUNNING ||
         aris_vec__size(group.resumers) == 0) {
         return false;
     }
 
-    aris_coroutine *current = group.current;
-    aris_coroutine *next = aris_vec__pop(group.resumers);
-    if (next->status != ARIS_COROUTINE_SUSPEND) return false;
+    Coroutine *current = group.current;
+    Coroutine *next = aris_vec__pop(group.resumers);
+    if (next->status != COROUTINE_SUSPEND) return false;
 
     next->yield_value = yield_value;
 
-    group.current->status = ARIS_COROUTINE_SUSPEND;
+    group.current->status = COROUTINE_SUSPEND;
     group.current = next;
-    group.current->status = ARIS_COROUTINE_RUNNING;
+    group.current->status = COROUTINE_RUNNING;
 
-    aris__coroutine_switch(current, next);
+    coroutine__switch(current, next);
 
     return true;
 }
 
-bool aris_coroutine_finish(void *return_value)
+bool coroutine_finish(void *return_value)
 {
-    if (group.current->status != ARIS_COROUTINE_RUNNING) return false;
+    if (group.current->status != COROUTINE_RUNNING) return false;
     if (aris_vec__size(group.resumers) == 0) exit(100);
 
-    aris_coroutine *current = group.current;
-    aris_coroutine *next = aris_vec__pop(group.resumers);
-    if (next->status != ARIS_COROUTINE_SUSPEND) return false;
+    Coroutine *current = group.current;
+    Coroutine *next = aris_vec__pop(group.resumers);
+    if (next->status != COROUTINE_SUSPEND) return false;
 
     next->yield_value = return_value;
 
-    group.current->status = ARIS_COROUTINE_DEAD;
+    group.current->status = COROUTINE_DEAD;
     group.current = next;
-    group.current->status = ARIS_COROUTINE_RUNNING;
+    group.current->status = COROUTINE_RUNNING;
     group.alive_count--;
 
-    aris__coroutine_switch(current, next);
+    coroutine__switch(current, next);
 
     return true;
 }
 
-size_t aris_coroutine_collect(void)
+size_t coroutine_collect(void)
 {
     size_t dead_count = 0;
 
     for (size_t i = 0; i < aris_vec__size(group.coroutines); i++) {
-        aris_coroutine *coroutine = &group.coroutines[i];
-        if (coroutine->status == ARIS_COROUTINE_DEAD) {
+        Coroutine *coroutine = &group.coroutines[i];
+        if (coroutine->status == COROUTINE_DEAD) {
             if (coroutine->stack_base) free(coroutine->stack_base);
             coroutine->stack_base = NULL; /* avoid double free in group free */
             dead_count++;
@@ -345,32 +345,32 @@ size_t aris_coroutine_collect(void)
     return dead_count;
 }
 
-size_t aris_coroutine_get_alive_count(void)
+size_t coroutine_get_alive_count(void)
 {
     return group.alive_count;
 }
 
-const aris_coroutine *aris_coroutine_get_current(void)
+const Coroutine *coroutine_get_current(void)
 {
     return group.current;
 }
 
-aris_coroutine_status aris_coroutine_get_status(const aris_coroutine *coroutine)
+Coroutine_Status coroutine_get_status(const Coroutine *coroutine)
 {
     return coroutine->status;
 }
 
-const char *aris_coroutine_get_name(const aris_coroutine *coroutine)
+const char *coroutine_get_name(const Coroutine *coroutine)
 {
     return coroutine->name ? coroutine->name : "@null@";
 }
 
-void *aris_coroutine_get_resume_value(const aris_coroutine *coroutine)
+void *coroutine_get_resume_value(const Coroutine *coroutine)
 {
     return coroutine->resume_value;
 }
 
-void *aris_coroutine_get_yield_value(const aris_coroutine *coroutine)
+void *coroutine_get_yield_value(const Coroutine *coroutine)
 {
     return coroutine->yield_value;
 }
@@ -383,25 +383,7 @@ void *aris_coroutine_get_yield_value(const aris_coroutine *coroutine)
 #undef aris_vec__free
 #undef aris_vec__reset
 
-#endif /* ARIS_COROUTINE_IMPLEMENTATION */
-
-#ifdef ARIS_COROUTINE_STRIP_PREFIX
-
-#define coroutine_group_init         aris_coroutine_group_init
-#define coroutine_group_fini         aris_coroutine_group_fini
-#define coroutine_create             aris_coroutine_create
-#define coroutine_resume             aris_coroutine_resume
-#define coroutine_yield              aris_coroutine_yield
-#define coroutine_finish             aris_coroutine_finish
-#define coroutine_collect            aris_coroutine_collect
-#define coroutine_get_alive_count    aris_coroutine_get_alive_count
-#define coroutine_get_current        aris_coroutine_get_current
-#define coroutine_get_name           aris_coroutine_get_name
-#define coroutine_get_status         aris_coroutine_get_status
-#define coroutine_get_resume_value   aris_coroutine_get_resume_value
-#define coroutine_get_yield_value    aris_coroutine_get_yield_value
-
-#endif /* ARIS_COROUTINE_STRIP_PREFIX */
+#endif /* COROUTINE_IMPLEMENTATION */
 
 /*
 ------------------------------------------------------------------------------

@@ -1,6 +1,5 @@
-#define ARIS_COROUTINE_IMPLEMENTATION
-#define ARIS_COROUTINE_STRIP_PREFIX
-#include "aris_coroutine.h"
+#define COROUTINE_IMPLEMENTATION
+#include "coroutine.h"
 
 static void counter(void *arg)
 {
@@ -17,14 +16,14 @@ int main(void)
 {
     coroutine_group_init();
 
-    aris_coroutine *c1 = coroutine_create("c1", counter);
-    aris_coroutine *c2 = coroutine_create("c2", counter);
+    Coroutine *c1 = coroutine_create("c1", counter);
+    Coroutine *c2 = coroutine_create("c2", counter);
 
     printf("------ counter ------\n");
     coroutine_resume(c1, (void*)10);
     coroutine_resume(c2, (void*)5);
-    while (coroutine_get_status(c1) != ARIS_COROUTINE_DEAD ||
-           coroutine_get_status(c2) != ARIS_COROUTINE_DEAD) {
+    while (coroutine_get_status(c1) != COROUTINE_DEAD ||
+           coroutine_get_status(c2) != COROUTINE_DEAD) {
         coroutine_resume(c1, NULL);
         coroutine_resume(c2, NULL);
     }

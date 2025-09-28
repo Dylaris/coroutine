@@ -1,6 +1,5 @@
-#define ARIS_COROUTINE_IMPLEMENTATION
-#define ARIS_COROUTINE_STRIP_PREFIX
-#include "aris_coroutine.h"
+#define COROUTINE_IMPLEMENTATION
+#include "coroutine.h"
 
 static void sum(void *arg)
 {
@@ -21,7 +20,7 @@ int main(void)
 {
     coroutine_group_init();
 
-    aris_coroutine *c1 = coroutine_create("c1", sum);
+    Coroutine *c1 = coroutine_create("c1", sum);
 
     printf("------ sum ------\n");
     coroutine_resume(c1, (void*)3);
